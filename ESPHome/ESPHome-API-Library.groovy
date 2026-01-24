@@ -268,8 +268,11 @@ void espHomeSubscribe() {
     log.info 'Subscribing to ESPHome HA services'
     espHomeSubscribeHaServicesRequest()
 
-    log.info "Subscribing to ESPHome ${settings.logEnable ? 'DEBUG' : 'INFO'} logging"
-    espHomeSubscribeLogs(settings.logEnable ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO)
+    // ESPHome device log streaming can be noisy (and some components log warnings frequently).
+    // Default to no device logs unless debug logging is enabled.
+    Integer deviceLogLevel = settings.logEnable ? LOG_LEVEL_DEBUG : LOG_LEVEL_NONE
+    log.info "Subscribing to ESPHome device logging (${deviceLogLevel == LOG_LEVEL_NONE ? 'NONE' : (settings.logEnable ? 'DEBUG' : 'INFO')})"
+    espHomeSubscribeLogs(deviceLogLevel, false)
 
     log.info 'Subscribing to ESPHome device states'
     espHomeSubscribeStatesRequest()
@@ -620,6 +623,35 @@ private static Map espHomeListEntitiesCameraResponse(Map<Integer, List> tags) {
             disabledByDefault: getBooleanTag(tags, 5),
             icon: getStringTag(tags, 6),
             entityCategory: toEntityCategory(getIntTag(tags, 7))
+    ]
+}
+
+@CompileStatic
+private static Map espHomeListEntitiesClimateResponse(Map<Integer, List> tags) {
+    return parseEntity(tags) + [
+            type: 'entity',
+            platform: 'climate',
+            supportsCurrentTemperature: getBooleanTag(tags, 5),
+            supportsTwoPointTargetTemperature: getBooleanTag(tags, 6),
+            supportedModes: getIntTagList(tags, 7).collect { e -> toClimateMode(e) },
+            visualMinTemperature: getFloatTag(tags, 8),
+            visualMaxTemperature: getFloatTag(tags, 9),
+            visualTargetTemperatureStep: getFloatTag(tags, 10),
+            supportsAction: getBooleanTag(tags, 12),
+            supportedFanModes: getIntTagList(tags, 13),
+            supportedSwingModes: getIntTagList(tags, 14),
+            supportedCustomFanModes: getStringTagList(tags, 15),
+            supportedPresets: getIntTagList(tags, 16),
+            supportedCustomPresets: getStringTagList(tags, 17),
+            disabledByDefault: getBooleanTag(tags, 18),
+            icon: getStringTag(tags, 19),
+            entityCategory: toEntityCategory(getIntTag(tags, 20)),
+            visualCurrentTemperatureStep: getFloatTag(tags, 21),
+            supportsCurrentHumidity: getBooleanTag(tags, 22),
+            supportsTargetHumidity: getBooleanTag(tags, 23),
+            visualMinHumidity: getFloatTag(tags, 24),
+            visualMaxHumidity: getFloatTag(tags, 25),
+            featureFlags: getIntTag(tags, 27)
     ]
 }
 
@@ -1078,6 +1110,9 @@ private void parseMessage(ByteArrayInputStream stream, long length) {
             break
         case MSG_LIST_BINARYSENSOR_RESPONSE:
             parse espHomeListEntitiesBinarySensorResponse(tags)
+            break
+        case MSG_LIST_CLIMATE_RESPONSE:
+            parse espHomeListEntitiesClimateResponse(tags)
             break
         case MSG_LIST_COVER_RESPONSE:
             parse espHomeListEntitiesCoverResponse(tags)

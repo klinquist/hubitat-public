@@ -14,6 +14,7 @@ The intent of the solution is to make it quick and easy to integrate your ESPHom
 - Transport encryption of the API layer is not supported at this time. When configuring [API](https://esphome.io/components/api.html) support make sure the "encryption" key is not specified
 - ESPHome 2026.1.0 removed native API password authentication; if you're on 2026+ the `password` setting is ignored (use API encryption instead, which Hubitat currently does not support)
 - While the majority of the API is supported, some capabilities are still "TODO"
+- ESPHome device log streaming is disabled by default (to avoid noisy warnings in Hubitat); enable the driver's `logEnable` to stream ESPHome logs
 
 ## 2. Preparation
 1. Make sure the ESPHome yaml for the device includes the ["api:" section](https://esphome.io/components/api.html) support and does NOT enable encryption.
