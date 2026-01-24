@@ -24,9 +24,9 @@
 library(
         name: 'espHomeApiHelper',
         namespace: 'esphome',
-        author: 'jb@nrgup.net',
+        author: 'jb@nrgup.net and kris@linquist.net',
         description: 'ESPHome Native Protobuf API Library',
-        importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/ESPHome/ESPHome-API-Library.groovy'
+        importUrl: 'https://raw.githubusercontent.com/klinquist/hubitat-public/esphome-econet/ESPHome/ESPHome-API-Library.groovy'
 )
 
 @Field static final String API_HELPER_VERSION = '1.4'
@@ -1427,8 +1427,17 @@ private void espHomeSubscribeLogsResponse(Map<Integer, List> tags) {
             log.error message
             break
         case LOG_LEVEL_WARN:
-            if (!message.contains("should block") && !message.contains("took a long time")) {
-                // If the message does not contain the phrases, log it as a warning
+            // Some components (notably `econet`) can be noisy with WARN-level messages that are
+            // usually transient and not actionable from Hubitat. Downgrade these to debug.
+            List<String> ignoredWarnPhrases = [
+                    'should block',
+                    'took a long time',
+                    'Ignoring partially received message due to timeout',
+                    'New read request while waiting for response to previous read request'
+            ]
+            if (ignoredWarnPhrases.any { phrase -> message.contains(phrase) }) {
+                if (settings.logEnable) { log.debug message }
+            } else {
                 log.warn message
             }
             break

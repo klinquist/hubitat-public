@@ -26,7 +26,7 @@ metadata {
         namespace: 'esphome',
         author: 'Kris Linquist',
         singleThreaded: true,
-        importUrl: 'https://raw.githubusercontent.com/bradsjm/hubitat-drivers/main/ESPHome/ESPHome-Rheem-Waterheater.groovy') {
+        importUrl: 'https://raw.githubusercontent.com/klinquist/hubitat-public/esphome-econet/ESPHome/ESPHome-Rheem-Waterheater.groovy') {
 
         capability 'Refresh'
         capability 'Initialize'
@@ -38,6 +38,8 @@ metadata {
         
         command 'setWaterHeaterMode', [[name:'Mode*','type':'ENUM','description':'Mode','constraints':['Heat Pump', 'Energy Saver', 'High Demand', 'Electric/Gas', 'Off']]]
         command 'setVacationMode', [[name:'VacationMode*','type':'ENUM','description':'VacationMode','constraints':['Off', 'Permanent']]]
+        command 'resetAlarms'
+        command 'resetAlarmHistory'
 
         attribute 'networkStatus', 'enum', [ 'connecting', 'online', 'offline' ]
         attribute 'waterHeaterMode', 'enum', ['Heat Pump', 'Energy Saver', 'High Demand', 'Electric/Gas', 'Off']
@@ -68,6 +70,13 @@ metadata {
         attribute 'econetMode', 'string'
         attribute 'activeAlerts', 'number'
         attribute 'microcontrollerConnected', 'enum', ['true', 'false']
+        attribute 'alarm1', 'string'
+        attribute 'alarm2', 'string'
+        attribute 'alarm3', 'string'
+        attribute 'alarm4', 'string'
+        attribute 'alarmHistory1', 'string'
+        attribute 'alarmHistory2', 'string'
+        attribute 'softwareVersion', 'string'
 
     }
 
@@ -213,6 +222,24 @@ public void setHeatingSetpoint(float value) {
     espHomeClimateCommand(key: state.climate as Long, targetTemperature: valueC)
 }
 
+public void resetAlarms() {
+    if (!state.alarmReset) {
+        log.warn "${device} resetAlarms requested but alarm reset button entity is not available"
+        return
+    }
+    if (logTextEnable) { log.info "${device} resetAlarms" }
+    espHomeButtonCommand(key: state.alarmReset as Long)
+}
+
+public void resetAlarmHistory() {
+    if (!state.alarmHistoryReset) {
+        log.warn "${device} resetAlarmHistory requested but alarm history reset button entity is not available"
+        return
+    }
+    if (logTextEnable) { log.info "${device} resetAlarmHistory" }
+    espHomeButtonCommand(key: state.alarmHistoryReset as Long)
+}
+
 
 // the parse method is invoked by the API library when messages are received
 public void parse(Map message) {
@@ -303,6 +330,33 @@ public void parse(Map message) {
                     break
                 case 'microcontroller_connected':
                     state['microcontrollerConnected'] = message.key
+                    break
+                case 'alarm_1':
+                    state['alarm1'] = message.key
+                    break
+                case 'alarm_2':
+                    state['alarm2'] = message.key
+                    break
+                case 'alarm_3':
+                    state['alarm3'] = message.key
+                    break
+                case 'alarm_4':
+                    state['alarm4'] = message.key
+                    break
+                case 'alarm_history_1':
+                    state['alarmHistory1'] = message.key
+                    break
+                case 'alarm_history_2':
+                    state['alarmHistory2'] = message.key
+                    break
+                case 'software_version_number':
+                    state['softwareVersion'] = message.key
+                    break
+                case 'alarm_reset':
+                    state['alarmReset'] = message.key
+                    break
+                case 'alarm_history_reset':
+                    state['alarmHistoryReset'] = message.key
                     break
                 default:
                     log.debug "Skipping storing key ID for : ${message.objectId} (${message.name})"
@@ -520,6 +574,55 @@ public void parse(Map message) {
             if (state.unitType as Long == message.key && message.hasState) {
                 if (device.currentValue('unitType') != message.state) {
                     updateAttribute('unitType', message.state)
+                }
+                return
+            }
+
+            if (state.alarm1 as Long == message.key && message.hasState) {
+                if (device.currentValue('alarm1') != message.state) {
+                    updateAttribute('alarm1', message.state)
+                }
+                return
+            }
+
+            if (state.alarm2 as Long == message.key && message.hasState) {
+                if (device.currentValue('alarm2') != message.state) {
+                    updateAttribute('alarm2', message.state)
+                }
+                return
+            }
+
+            if (state.alarm3 as Long == message.key && message.hasState) {
+                if (device.currentValue('alarm3') != message.state) {
+                    updateAttribute('alarm3', message.state)
+                }
+                return
+            }
+
+            if (state.alarm4 as Long == message.key && message.hasState) {
+                if (device.currentValue('alarm4') != message.state) {
+                    updateAttribute('alarm4', message.state)
+                }
+                return
+            }
+
+            if (state.alarmHistory1 as Long == message.key && message.hasState) {
+                if (device.currentValue('alarmHistory1') != message.state) {
+                    updateAttribute('alarmHistory1', message.state)
+                }
+                return
+            }
+
+            if (state.alarmHistory2 as Long == message.key && message.hasState) {
+                if (device.currentValue('alarmHistory2') != message.state) {
+                    updateAttribute('alarmHistory2', message.state)
+                }
+                return
+            }
+
+            if (state.softwareVersion as Long == message.key && message.hasState) {
+                if (device.currentValue('softwareVersion') != message.state) {
+                    updateAttribute('softwareVersion', message.state)
                 }
                 return
             }
