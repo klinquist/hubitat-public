@@ -54,6 +54,20 @@ metadata {
 
         
         attribute 'hotWaterAvailabilityPercent', 'number'
+        attribute 'evaporatorTemperature', 'number'
+        attribute 'suctionTemperature', 'number'
+        attribute 'dischargeTemperature', 'number'
+        attribute 'compressorRuntime', 'number'
+        attribute 'fanLowSpeedRuntime', 'number'
+        attribute 'fanHighSpeedRuntime', 'number'
+        attribute 'energyKWh', 'number'
+        attribute 'acCurrentRms', 'number'
+        attribute 'expansionValvePosition', 'number'
+        attribute 'fanSpeed', 'string'
+        attribute 'unitType', 'string'
+        attribute 'econetMode', 'string'
+        attribute 'activeAlerts', 'number'
+        attribute 'microcontrollerConnected', 'enum', ['true', 'false']
 
     }
 
@@ -106,6 +120,10 @@ def convertCtoF(temp) {
 
 def roundToNearestTenth(value) {
     return Math.round(value * 10) / 10.0
+}
+
+def roundTo(value, decimals) {
+    return new BigDecimal(value.toString()).setScale(decimals as int, java.math.RoundingMode.HALF_UP).doubleValue()
 }
 
 public void initialize() {
@@ -244,9 +262,52 @@ public void parse(Map message) {
                 case 'compressor':
                     state['compressorState'] = message.key
                     break                    
+                case 'evaporator_temperature':
+                    state['evaporatorTemperature'] = message.key
+                    break
+                case 'suction_temperature':
+                    state['suctionTemperature'] = message.key
+                    break
+                case 'discharge_temperature':
+                    state['dischargeTemperature'] = message.key
+                    break
+                case 'compressor_runtime':
+                    state['compressorRuntime'] = message.key
+                    break
+                case 'fan_low_speed_runtime':
+                    state['fanLowSpeedRuntime'] = message.key
+                    break
+                case 'fan_high_speed_runtime':
+                    state['fanHighSpeedRuntime'] = message.key
+                    break
+                case 'energy':
+                    state['energyKWh'] = message.key
+                    break
+                case 'ac_current_rms':
+                    state['acCurrentRms'] = message.key
+                    break
+                case 'expansion_valve_current_position':
+                    state['expansionValvePosition'] = message.key
+                    break
+                case 'fan_speed':
+                    state['fanSpeed'] = message.key
+                    break
+                case 'unit_type':
+                    state['unitType'] = message.key
+                    break
+                case 'wifi_signal_strength':
+                    state['signalStrength'] = message.key
+                    break
+                case 'active_alerts':
+                    state['activeAlerts'] = message.key
+                    break
+                case 'microcontroller_connected':
+                    state['microcontrollerConnected'] = message.key
+                    break
                 default:
                     log.debug "Skipping storing key ID for : ${message.objectId} (${message.name})"
             }
+            break
 
         case 'state':
             
@@ -262,6 +323,21 @@ public void parse(Map message) {
                 return
             }
 
+            if (state.activeAlerts as Long == message.key && message.hasState) {
+                Integer count = Math.round(message.state as Float)
+                if (device.currentValue('activeAlerts') != count) {
+                    updateAttribute('activeAlerts', count)
+                }
+                return
+            }
+
+            if (state.microcontrollerConnected as Long == message.key && message.hasState) {
+                String connected = (message.state == true) ? 'true' : 'false'
+                if (device.currentValue('microcontrollerConnected') != connected) {
+                    updateAttribute('microcontrollerConnected', connected)
+                }
+                return
+            }
 
             //All the other sensors
 
@@ -269,6 +345,36 @@ public void parse(Map message) {
                 Integer power = Math.round(message.state as Float)
                 if (device.currentValue('powerWatts') != power) {
                     updateAttribute('powerWatts', power, 'W')
+                }
+                return
+            }
+
+            if (state.evaporatorTemperature as Long == message.key && message.hasState) {
+                Double temperature = message.state
+                if (celsius) temperature = convertFtoC(temperature)
+                temperature = roundToNearestTenth(temperature)
+                if (device.currentValue('evaporatorTemperature') != temperature) {
+                    updateAttribute('evaporatorTemperature', temperature, celsius == true ? 'C' : 'F')
+                }
+                return
+            }
+
+            if (state.suctionTemperature as Long == message.key && message.hasState) {
+                Double temperature = message.state
+                if (celsius) temperature = convertFtoC(temperature)
+                temperature = roundToNearestTenth(temperature)
+                if (device.currentValue('suctionTemperature') != temperature) {
+                    updateAttribute('suctionTemperature', temperature, celsius == true ? 'C' : 'F')
+                }
+                return
+            }
+
+            if (state.dischargeTemperature as Long == message.key && message.hasState) {
+                Double temperature = message.state
+                if (celsius) temperature = convertFtoC(temperature)
+                temperature = roundToNearestTenth(temperature)
+                if (device.currentValue('dischargeTemperature') != temperature) {
+                    updateAttribute('dischargeTemperature', temperature, celsius == true ? 'C' : 'F')
                 }
                 return
             }
@@ -328,6 +434,54 @@ public void parse(Map message) {
                 return
             }
 
+            if (state.compressorRuntime as Long == message.key && message.hasState) {
+                Double hours = roundTo(message.state as Double, 2)
+                if (device.currentValue('compressorRuntime') != hours) {
+                    updateAttribute('compressorRuntime', hours, 'hours')
+                }
+                return
+            }
+
+            if (state.fanLowSpeedRuntime as Long == message.key && message.hasState) {
+                Double hours = roundTo(message.state as Double, 2)
+                if (device.currentValue('fanLowSpeedRuntime') != hours) {
+                    updateAttribute('fanLowSpeedRuntime', hours, 'hours')
+                }
+                return
+            }
+
+            if (state.fanHighSpeedRuntime as Long == message.key && message.hasState) {
+                Double hours = roundTo(message.state as Double, 2)
+                if (device.currentValue('fanHighSpeedRuntime') != hours) {
+                    updateAttribute('fanHighSpeedRuntime', hours, 'hours')
+                }
+                return
+            }
+
+            if (state.energyKWh as Long == message.key && message.hasState) {
+                Double energy = roundTo(message.state as Double, 3)
+                if (device.currentValue('energyKWh') != energy) {
+                    updateAttribute('energyKWh', energy, 'kWh')
+                }
+                return
+            }
+
+            if (state.acCurrentRms as Long == message.key && message.hasState) {
+                Double amps = roundTo(message.state as Double, 3)
+                if (device.currentValue('acCurrentRms') != amps) {
+                    updateAttribute('acCurrentRms', amps, 'A')
+                }
+                return
+            }
+
+            if (state.expansionValvePosition as Long == message.key && message.hasState) {
+                Double percent = roundTo(message.state as Double, 1)
+                if (device.currentValue('expansionValvePosition') != percent) {
+                    updateAttribute('expansionValvePosition', percent, '%')
+                }
+                return
+            }
+
             if (state.vacation as Long == message.key && message.hasState) {
                 if (device.currentValue('vacationMode') != message.state) {
                     if (vacationModeSwitch){
@@ -342,9 +496,30 @@ public void parse(Map message) {
                 return
             }
 
+            if (state.mode as Long == message.key && message.hasState) {
+                if (device.currentValue('econetMode') != message.state) {
+                    updateAttribute('econetMode', message.state)
+                }
+                return
+            }
+
             if (state.heatingElementState as Long == message.key && message.hasState) {
                 if (device.currentValue('heatingElementState') != message.state) {
                     updateAttribute('heatingElementState', message.state)
+                }
+                return
+            }
+
+            if (state.fanSpeed as Long == message.key && message.hasState) {
+                if (device.currentValue('fanSpeed') != message.state) {
+                    updateAttribute('fanSpeed', message.state)
+                }
+                return
+            }
+
+            if (state.unitType as Long == message.key && message.hasState) {
+                if (device.currentValue('unitType') != message.state) {
+                    updateAttribute('unitType', message.state)
                 }
                 return
             }
