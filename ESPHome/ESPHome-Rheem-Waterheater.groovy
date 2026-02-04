@@ -22,7 +22,7 @@
  */
 metadata {
     definition(
-        name: 'ESPHome Rheem Water Heater',
+        name: 'ESPHome Rheem Water Heater (Feb 2026)',
         namespace: 'esphome',
         author: 'Kris Linquist',
         singleThreaded: true,
@@ -135,6 +135,22 @@ def roundTo(value, decimals) {
     return new BigDecimal(value.toString()).setScale(decimals as int, java.math.RoundingMode.HALF_UP).doubleValue()
 }
 
+private String normalizeEntityId(final Map message) {
+    String objectId = (message?.objectId ?: '').toString().trim()
+    if (objectId) {
+        return objectId
+    }
+    String name = (message?.name ?: '').toString().trim()
+    if (!name) {
+        return ''
+    }
+    String normalized = name.toLowerCase()
+            .replaceAll(/[^a-z0-9]+/, '_')
+            .replaceAll(/_+/, '_')
+            .replaceAll(/^_+|_+$/, '')
+    return normalized
+}
+
 public void initialize() {
     // API library command to open socket to device, it will automatically reconnect if needed
     openSocket()
@@ -192,12 +208,28 @@ public void setWaterHeaterMode(String value) {
     if (value == 'Energy Saver'){
         value = 'Eco Mode'
     }
+    if (device.currentValue('waterHeaterMode') == value) {
+        if (logTextEnable) { log.info "${device} setWaterHeaterMode to ${value} skipped (already set)" }
+        return
+    }
     if (logTextEnable) { log.info "${device} setWaterHeaterMode to ${value}" }
+    if (!state.climate) {
+        log.warn "${device} setWaterHeaterMode requested but climate key is not available yet; try Refresh first"
+        return
+    }
     espHomeClimateCommand(key: state.climate as Long, customPreset: value)
 }
 
 public void setVacationMode(String value) {
     if (logTextEnable) { log.info "${device} setVacationMode to ${value} using key ${state.vacation}" }
+    if (device.currentValue('vacationMode') == value) {
+        if (logTextEnable) { log.info "${device} setVacationMode to ${value} skipped (already set)" }
+        return
+    }
+    if (!state.vacation) {
+        log.warn "${device} setVacationMode requested but vacation key is not available yet; try Refresh first"
+        return
+    }
     espHomeSelectCommand(key: state.vacation as Long, state: value)
 }
 
@@ -219,6 +251,15 @@ public void setHeatingSetpoint(float value) {
 
     if (logTextEnable) { log.info "${device} setThermostatHeatingSetpoint to ${value} (${valueC} celsius)" }
     //ESPHome expects Celsius
+    if (!state.climate) {
+        log.warn "${device} setHeatingSetpoint requested but climate key is not available yet; try Refresh first"
+        return
+    }
+    BigDecimal currentSetpoint = device.currentValue('thermostatHeatingSetpoint') as BigDecimal
+    if (currentSetpoint != null && Math.abs((currentSetpoint as double) - (value as double)) < 0.1d) {
+        if (logTextEnable) { log.info "${device} setHeatingSetpoint to ${value} skipped (already set)" }
+        return
+    }
     espHomeClimateCommand(key: state.climate as Long, targetTemperature: valueC)
 }
 
@@ -255,7 +296,8 @@ public void parse(Map message) {
             //Each sensor has a unique key that is used to send commands to the device (also used to interpret received state messages)
             //These are received as a flood of messages when the device is first connected and are used to populate the settings
 
-            switch (message.objectId) {
+            String entityId = normalizeEntityId(message)
+            switch (entityId) {
                 case 'power':
                     state['power'] = message.key
                     break
@@ -359,7 +401,9 @@ public void parse(Map message) {
                     state['alarmHistoryReset'] = message.key
                     break
                 default:
-                    log.debug "Skipping storing key ID for : ${message.objectId} (${message.name})"
+                    if (logEnable) {
+                        log.debug "Skipping storing key ID for : ${message.objectId ?: ''} (${message.name ?: ''}) (normalized: ${entityId})"
+                    }
             }
             break
 
@@ -640,7 +684,6 @@ public void parse(Map message) {
                     } else {
                         updateAttribute('thermostatOperatingState', 'idle')
                     }
-                    updateAttribute('thermostatOperatingState', message.state)
                 }
                 return
             }            
