@@ -32,6 +32,7 @@ metadata {
         capability 'Initialize'
         capability 'SignalStrength'
         capability 'Switch'
+        capability 'Thermostat'
         capability 'TemperatureMeasurement'
         capability 'ThermostatHeatingSetpoint'
         capability 'ThermostatOperatingState'
@@ -135,6 +136,50 @@ def roundTo(value, decimals) {
     return new BigDecimal(value.toString()).setScale(decimals as int, java.math.RoundingMode.HALF_UP).doubleValue()
 }
 
+private void initializeThermostatAttributes() {
+    String modes = '["off","heat","auto","emergency heat"]'
+    if (device.currentValue('supportedThermostatModes') != modes) {
+        updateAttribute('supportedThermostatModes', modes)
+    }
+    if (device.currentValue('supportedThermostatFanModes') != '["auto"]') {
+        updateAttribute('supportedThermostatFanModes', '["auto"]')
+    }
+    if (device.currentValue('thermostatFanMode') != 'auto') {
+        updateAttribute('thermostatFanMode', 'auto')
+    }
+}
+
+private String waterHeaterModeToThermostatMode(final String waterHeaterMode) {
+    switch (waterHeaterMode) {
+        case 'Off':
+            return 'off'
+        case 'Energy Saver':
+            return 'auto'
+        case 'High Demand':
+            return 'emergency heat'
+        case 'Heat Pump':
+        case 'Electric/Gas':
+            return 'heat'
+        default:
+            return 'heat'
+    }
+}
+
+private String thermostatModeToWaterHeaterMode(final String thermostatMode) {
+    switch (thermostatMode) {
+        case 'off':
+            return 'Off'
+        case 'auto':
+            return 'Energy Saver'
+        case 'heat':
+            return 'Heat Pump'
+        case 'emergency heat':
+            return 'High Demand'
+        default:
+            return null
+    }
+}
+
 private String normalizeEntityId(final Map message) {
     String objectId = (message?.objectId ?: '').toString().trim()
     if (objectId) {
@@ -154,6 +199,7 @@ private String normalizeEntityId(final Map message) {
 public void initialize() {
     // API library command to open socket to device, it will automatically reconnect if needed
     openSocket()
+    initializeThermostatAttributes()
 
     if (logEnable) {
         runIn(1800, 'logsOff')
@@ -205,19 +251,68 @@ public void off() {
 }
 
 public void setWaterHeaterMode(String value) {
-    if (value == 'Energy Saver'){
+    String requestedMode = value
+    if (value == 'Energy Saver') {
         value = 'Eco Mode'
     }
-    if (device.currentValue('waterHeaterMode') == value) {
-        if (logTextEnable) { log.info "${device} setWaterHeaterMode to ${value} skipped (already set)" }
+    String currentMode = device.currentValue('waterHeaterMode')
+    if (currentMode == requestedMode || (currentMode == 'Energy Saver' && value == 'Eco Mode')) {
+        if (logTextEnable) { log.info "${device} setWaterHeaterMode to ${requestedMode} skipped (already set)" }
         return
     }
-    if (logTextEnable) { log.info "${device} setWaterHeaterMode to ${value}" }
+    if (logTextEnable) { log.info "${device} setWaterHeaterMode to ${requestedMode}" }
     if (!state.climate) {
         log.warn "${device} setWaterHeaterMode requested but climate key is not available yet; try Refresh first"
         return
     }
     espHomeClimateCommand(key: state.climate as Long, customPreset: value)
+}
+
+public void setThermostatMode(String thermostatMode) {
+    String normalizedMode = (thermostatMode ?: '').trim().toLowerCase()
+    String waterHeaterMode = thermostatModeToWaterHeaterMode(normalizedMode)
+    if (!waterHeaterMode) {
+        log.warn "${device} setThermostatMode to ${thermostatMode} is not supported"
+        return
+    }
+    if (logTextEnable) { log.info "${device} setThermostatMode to ${normalizedMode} (mapped to ${waterHeaterMode})" }
+    setWaterHeaterMode(waterHeaterMode)
+}
+
+public void auto() {
+    setThermostatMode('auto')
+}
+
+public void heat() {
+    setThermostatMode('heat')
+}
+
+public void emergencyHeat() {
+    setThermostatMode('emergency heat')
+}
+
+public void cool() {
+    log.warn "${device} cool mode is not supported"
+}
+
+public void setCoolingSetpoint(float value) {
+    log.warn "${device} setCoolingSetpoint is not supported"
+}
+
+public void setThermostatFanMode(String thermostatFanMode) {
+    log.warn "${device} setThermostatFanMode is not supported"
+}
+
+public void fanAuto() {
+    updateAttribute('thermostatFanMode', 'auto')
+}
+
+public void fanOn() {
+    log.warn "${device} fanOn is not supported"
+}
+
+public void fanCirculate() {
+    log.warn "${device} fanCirculate is not supported"
 }
 
 public void setVacationMode(String value) {
@@ -704,15 +799,18 @@ public void parse(Map message) {
                     if (device.currentValue('thermostatHeatingSetpoint') != temperature) {
                         updateAttribute('thermostatHeatingSetpoint', temperature, celsius == true ? 'C' : 'F')
                         updateAttribute('heatingSetpoint', temperature, celsius == true ? 'C' : 'F') //Set this attribute so the "ThermostatHeatingSetpoint" capability works
+                        updateAttribute('thermostatSetpoint', temperature, celsius == true ? 'C' : 'F')
                     }
                 }
 
                 if (message.customPreset) {                    
-                    if (message.customPreset == 'Eco Mode'){
-                        message.customPreset = 'Energy Saver'
+                    initializeThermostatAttributes()
+                    String customPreset = message.customPreset
+                    if (customPreset == 'Eco Mode'){
+                        customPreset = 'Energy Saver'
                     }
-                    if (device.currentValue('waterHeaterMode') != message.customPreset) {
-                        if (message.customPreset == 'Off'){
+                    if (device.currentValue('waterHeaterMode') != customPreset) {
+                        if (customPreset == 'Off'){
                             if (!vacationModeSwitch){
                                 updateAttribute('switch', 'off')
                             }
@@ -721,7 +819,11 @@ public void parse(Map message) {
                                 updateAttribute('switch', 'on')
                             }
                         }
-                        updateAttribute('waterHeaterMode', message.customPreset)
+                        updateAttribute('waterHeaterMode', customPreset)
+                    }
+                    String thermostatMode = waterHeaterModeToThermostatMode(customPreset)
+                    if (device.currentValue('thermostatMode') != thermostatMode) {
+                        updateAttribute('thermostatMode', thermostatMode)
                     }
                 }
 
